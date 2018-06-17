@@ -1,0 +1,15 @@
+{
+  "name": "ridl_airdrop",
+  "version": "1.0.0",
+  "description": "",
+  "main": "airdrop.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node airdrop.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "eosjs": "^15.0.0"
+  }
+}
