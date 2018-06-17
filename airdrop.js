@@ -34,18 +34,37 @@ const run = async () => {
     while(config.privateKey === '' || !EOSTools.validPrivateKey(config.privateKey))
         config.privateKey = await Prompter.prompt(`What is the private key for the issuer: '${config.issuer}'`);
 
+    const snapshot = await SnapshotTools.getCSV('snapshot_test.csv');
+    const accountBalances = SnapshotTools.csvToJson(snapshot);
+    const ratioBalances = accountBalances.map(tuple => Object.assign(tuple, {amount:(tuple.amount * config.ratio).toFixed(config.decimals)}))
+                          .filter(tuple => tuple.amount > 0);
+    console.log(ratioBalances);
+    const total = (ratioBalances.reduce((acc, e) => acc += parseFloat(e.amount), 0)).toFixed(config.decimals);
+    console.log('total', total);
+
+
+    const confirm = await Prompter.prompt(
+        `\r\nYou are about to airdrop ${total} ${config.symbol} tokens on ${accountBalances.length} accounts. \r\nType 'y' to continue.`
+    );
+
+    //5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3
+
+    if(confirm.toLowerCase() !== 'y')
+        process.exit();
+
+    const startFrom = await Prompter.prompt(
+        `\r\nIf you want to start from a specific account enter it, otherwise press enter: `
+    );
+
+    console.warn('\r\n\------------------------------------------------------------------\r\n');
+    console.warn(`Starting to airdrop from account '${startFrom ? startFrom : ratioBalances[0].account}'`);
+    console.warn('\r\n\------------------------------------------------------------------\r\n');
+
     // Shutting off IO
     Prompter.donePrompting();
 
-    const snapshot = await SnapshotTools.getCSV('snapshot_test.csv');
-    const accountBalances = SnapshotTools.csvToJson(snapshot);
+    await EOSTools.dropTokens(ratioBalances, config);
 
-    accountBalances.map(bal => {
-        const drop = getRatio(bal);
-        console.log('dropping', drop, 'original', bal.amount)
-    });
-
-    console.log('json', accountBalances);
     process.exit();
 };
 
