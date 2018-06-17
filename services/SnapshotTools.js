@@ -20,6 +20,9 @@ exports.getCSV = (pathToCSV) => {
  * @returns {Array}
  */
 exports.csvToJson = (csv) => {
+    // TODO: Should this be chunked out?
+    // TODO: It's possible this could cause problems on slower machines with 150K+ accounts
+
     // Formatting array ( removing parenthesis, carriage returns and new lines, and splitting by comma delimiter
     const arr = csv.replace(/["]/g, '').split('\r\n').join(',').split(',');
 
