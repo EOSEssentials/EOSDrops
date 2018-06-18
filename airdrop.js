@@ -19,25 +19,29 @@ const getRatio = (tuple) => (tuple.amount * config.ratio).toFixed(config.decimal
 
 
 const run = async () => {
-    // while(config.symbol === '')
-    //     config.symbol = await Prompter.prompt('What is the SYMBOL for this token?');
-    //
-    // // Filling `decimals` and `issuer`
-    // if(!await EOSTools.fillTokenStats(config)){
-    //     console.error(`Could not find ${config.symbol} token on the eosio.token contract!`);
-    //     process.exit();
-    // }
-    //
-    // while(config.ratio <= 0)
-    //     config.ratio = await Prompter.prompt('What is the ratio to drop for this token? ( examples: 1, 2, 0.25 )');
-    //
-    // while(config.privateKey === '' || !EOSTools.validPrivateKey(config.privateKey))
-    //     config.privateKey = await Prompter.prompt(`What is the private key for the issuer: '${config.issuer}'`);
+    await EOSTools.setNetwork(
+        await Prompter.prompt('\r\nWhat network do you want to use?\r\n( leave blank for https://nodes.get-scatter.com )')
+    );
 
-    config.symbol = 'SYS';
-    await EOSTools.fillTokenStats(config);
-    config.ratio = 0.1;
-    config.privateKey = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3';
+    while(config.symbol === '')
+        config.symbol = await Prompter.prompt('\r\nWhat is the SYMBOL for this token?');
+
+    // Filling `decimals` and `issuer`
+    if(!await EOSTools.fillTokenStats(config)){
+        console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract!`);
+        process.exit();
+    }
+
+    while(config.ratio <= 0)
+        config.ratio = await Prompter.prompt('\r\nWhat is the ratio to drop for this token? ( examples: 1, 2, 0.25 )');
+
+    while(config.privateKey === '' || !EOSTools.validPrivateKey(config.privateKey))
+        config.privateKey = await Prompter.prompt(`\r\nWhat is the private key for the issuer: '${config.issuer}'`);
+
+    // config.symbol = 'SYS';
+    // await EOSTools.fillTokenStats(config);
+    // config.ratio = 0.1;
+    // config.privateKey = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3';
 
     const snapshot = await SnapshotTools.getCSV('snapshot_test.csv');
     const accountBalances = SnapshotTools.csvToJson(snapshot);
@@ -47,7 +51,7 @@ const run = async () => {
     const total = (ratioBalances.reduce((acc, e) => acc += parseFloat(e.amount), 0)).toFixed(config.decimals);
 
     const confirm = await Prompter.prompt(
-        `\r\nYou are about to airdrop ${total} ${config.symbol} tokens on ${accountBalances.length} accounts. \r\nPress enter to continue.`
+        `\r\nYou are about to airdrop ${total} ${config.symbol} tokens on ${accountBalances.length} accounts. \r\nPress enter to continue`
     );
 
     //5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3

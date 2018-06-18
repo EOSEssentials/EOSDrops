@@ -1,8 +1,20 @@
 const Eos = require('eosjs');
 const {ecc} = Eos.modules;
 
+let httpEndpoint = null;
+
+exports.setNetwork = async network => {
+    if(!network || !network.length) network = 'http://192.168.1.7:8888';
+
+    await Eos({httpEndpoint:network}).getInfo({}).catch(() => {
+        console.error(`Could not get_info from: ${network}`)
+        process.exit();
+    });
+
+    httpEndpoint = network;
+};
+
 const getEos = async privateKey => {
-    const httpEndpoint = 'http://192.168.1.7:8888';
     const chainId = (await Eos({httpEndpoint}).getInfo({})).chainId;
     return privateKey
         ? Eos({httpEndpoint, keyProvider:privateKey, chainId})
