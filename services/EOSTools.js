@@ -59,7 +59,7 @@ const dropBatch = async (batch, eos, auth, symbol) => {
         process.exit();
     }
 
-    console.log(`Dropped to: ${batch.map(x => x.account).join(',')}`);
+    console.log(`${new Date().toLocaleString()} | ${dropped} | ${batch.map(x => x.account).join(',')}`);
     return true;
 };
 
