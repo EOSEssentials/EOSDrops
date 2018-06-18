@@ -51,8 +51,19 @@ const dropBatch = async (batch, eos, auth, symbol) => {
     return true;
 };
 
+const recurseBatch = async (accountBalances, eos, auth, config) => {
+    return new Promise(async (resolve) => {
+        if(!accountBalances.length) return resolve(true);
+
+        const batch = [];
+        while(batch.length < 10 && accountBalances.length) batch.push(accountBalances.shift());
+        await dropBatch(batch, eos, auth, config.symbol);
+        setTimeout(async() => await recurseBatch(accountBalances, eos, auth, config), 510);
+    })
+};
+
 exports.dropTokens = async (accountBalances, config) => {
     const eos = await getEos(config.privateKey);
     const auth = {authorization:[`${config.issuer}@active`]};
-    await dropBatch(accountBalances, eos, auth, config.symbol);
+    await recurseBatch(accountBalances, eos, auth, config);
 };
