@@ -22,34 +22,34 @@ const getRatio = (tuple) => (tuple.amount * config.ratio).toFixed(config.decimal
 
 const run = async () => {
 
-    await EOSTools.setNetwork('http://192.168.1.7:8888');
-    config.tokenAccount = 'eosio.token';
-    config.symbol = 'TEST';
-    await EOSTools.fillTokenStats(config);
-    config.ratio = 1;
-    config.privateKey = '5J5M2nbTFm2duizuS4ufggyyHLZg4dZcKRbSSDPp5rMq9b77h2a';
+    // await EOSTools.setNetwork('http://192.168.1.7:8888');
+    // config.tokenAccount = 'eosio.token';
+    // config.symbol = 'TEST';
+    // await EOSTools.fillTokenStats(config);
+    // config.ratio = 1;
+    // config.privateKey = '5J5M2nbTFm2duizuS4ufggyyHLZg4dZcKRbSSDPp5rMq9b77h2a';
 
-    // await EOSTools.setNetwork(
-    //     await Prompter.prompt('\r\nWhat network do you want to use?\r\n( leave blank for https://nodes.get-scatter.com )')
-    // );
-    //
-    // while(config.tokenAccount === '')
-    //     config.tokenAccount = await Prompter.prompt('\r\nWhat is the name of the account the eosio.token contract sits on?');
-    //
-    // while(config.symbol === '')
-    //     config.symbol = await Prompter.prompt('\r\nWhat is the SYMBOL for this token?');
-    //
-    // // Filling `decimals` and `issuer`
-    // if(!await EOSTools.fillTokenStats(config)){
-    //     console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
-    //     process.exit();
-    // }
-    //
-    // while(config.ratio <= 0)
-    //     config.ratio = await Prompter.prompt('\r\nWhat is the ratio to drop for this token? ( examples: 1, 2, 0.25 )');
-    //
-    // while(config.privateKey === '' || !EOSTools.validPrivateKey(config.privateKey))
-    //     config.privateKey = await Prompter.prompt(`\r\nWhat is the private key for the issuer: '${config.issuer}'`);
+    await EOSTools.setNetwork(
+        await Prompter.prompt('\r\nWhat network do you want to use?\r\n( leave blank for https://nodes.get-scatter.com )')
+    );
+
+    while(config.tokenAccount === '')
+        config.tokenAccount = await Prompter.prompt('\r\nWhat is the name of the account the eosio.token contract sits on?');
+
+    while(config.symbol === '')
+        config.symbol = await Prompter.prompt('\r\nWhat is the SYMBOL for this token?');
+
+    // Filling `decimals` and `issuer`
+    if(!await EOSTools.fillTokenStats(config)){
+        console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
+        process.exit();
+    }
+
+    while(config.ratio <= 0)
+        config.ratio = await Prompter.prompt('\r\nWhat is the ratio to drop for this token? ( examples: 1, 2, 0.25 )');
+
+    while(config.privateKey === '' || !EOSTools.validPrivateKey(config.privateKey))
+        config.privateKey = await Prompter.prompt(`\r\nWhat is the private key for the issuer: '${config.issuer}'`);
 
     const snapshot = await SnapshotTools.getCSV('snapshot_test.csv');
     const accountBalances = SnapshotTools.csvToJson(snapshot);
