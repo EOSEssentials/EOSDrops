@@ -15,7 +15,6 @@ exports.setNetwork = async network => {
 };
 
 const getEos = async privateKey => {
-    console.log('httpEndpoint', httpEndpoint)
     const chainId = (await Eos({httpEndpoint}).getInfo({})).chainId;
     return privateKey
         ? Eos({httpEndpoint, keyProvider:privateKey, chainId})

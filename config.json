@@ -1,0 +1,8 @@
+{
+  "network":"http://192.168.1.7:8888",
+  "tokenAccount":"eosio.token",
+  "ratio":1,
+  "symbol":"TEST",
+  "privateKey":"5J5M2nbTFm2duizuS4ufggyyHLZg4dZcKRbSSDPp5rMq9b77h2a",
+  "startFrom":""
+}

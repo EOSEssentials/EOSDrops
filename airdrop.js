@@ -2,7 +2,7 @@ const SnapshotTools = require('./services/SnapshotTools');
 const Prompter = require('./services/Prompter');
 const EOSTools = require('./services/EOSTools');
 
-const config = {
+let config = {
     tokenAccount:'',
     ratio:0,
     decimals:4,
@@ -29,27 +29,57 @@ const run = async () => {
     // config.ratio = 1;
     // config.privateKey = '5J5M2nbTFm2duizuS4ufggyyHLZg4dZcKRbSSDPp5rMq9b77h2a';
 
-    await EOSTools.setNetwork(
-        await Prompter.prompt('\r\nWhat network do you want to use?\r\n( leave blank for https://nodes.get-scatter.com )')
+    let usingConfig = await Prompter.prompt(
+        `\r\nDo you want to use the config.json file? \r\nEnter 'y' or press enter to set up using command line prompts`
     );
+    usingConfig = usingConfig.toLowerCase() === 'y';
 
-    while(config.tokenAccount === '')
-        config.tokenAccount = await Prompter.prompt('\r\nWhat is the name of the account the eosio.token contract sits on?');
+    if(usingConfig){
+        config = Object.assign(config, require('./config.json'));
 
-    while(config.symbol === '')
-        config.symbol = await Prompter.prompt('\r\nWhat is the SYMBOL for this token?');
+        const asserter = (condition, msg) => {
+            if(!condition){
+                throw new Error(msg);
+                process.exit();
+            }
+        };
 
-    // Filling `decimals` and `issuer`
-    if(!await EOSTools.fillTokenStats(config)){
-        console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
-        process.exit();
+        asserter(config.network !== '', 'Network must be a fully qualified URL ( example: http://domain.com:8888 )');
+        asserter(config.tokenAccount !== '', 'Token account must not be empty');
+        asserter(config.symbol !== '', 'Symbol must not be empty');
+        asserter(config.privateKey !== '', 'Issuer\'s private key must not be empty');
+        asserter(config.ratio > 0, 'Ratio can not be less than 0');
+
+        await EOSTools.setNetwork(config.network);
+        if (!await EOSTools.fillTokenStats(config)) {
+            console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
+            process.exit();
+        }
+    } else {
+
+        await EOSTools.setNetwork(
+            await Prompter.prompt('\r\nWhat network do you want to use?\r\n( leave blank for https://nodes.get-scatter.com )')
+        );
+
+        while (config.tokenAccount === '')
+            config.tokenAccount = await Prompter.prompt('\r\nWhat is the name of the account the eosio.token contract sits on?');
+
+        while (config.symbol === '')
+            config.symbol = await Prompter.prompt('\r\nWhat is the SYMBOL for this token?');
+
+        // Filling `decimals` and `issuer`
+        if (!await EOSTools.fillTokenStats(config)) {
+            console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
+            process.exit();
+        }
+
+        while (config.ratio <= 0)
+            config.ratio = await Prompter.prompt('\r\nWhat is the ratio to drop for this token? ( examples: 1, 2, 0.25 )');
+
+        while (config.privateKey === '' || !EOSTools.validPrivateKey(config.privateKey))
+            config.privateKey = await Prompter.prompt(`\r\nWhat is the private key for the issuer: '${config.issuer}'`);
+
     }
-
-    while(config.ratio <= 0)
-        config.ratio = await Prompter.prompt('\r\nWhat is the ratio to drop for this token? ( examples: 1, 2, 0.25 )');
-
-    while(config.privateKey === '' || !EOSTools.validPrivateKey(config.privateKey))
-        config.privateKey = await Prompter.prompt(`\r\nWhat is the private key for the issuer: '${config.issuer}'`);
 
     const snapshot = await SnapshotTools.getCSV('snapshot_test.csv');
     const accountBalances = SnapshotTools.csvToJson(snapshot);
@@ -67,7 +97,7 @@ const run = async () => {
         `\r\nYou are about to airdrop ${total} ${config.symbol} tokens on ${accountBalances.length} accounts. \r\nPress enter to continue`
     ) !== '') process.exit();
 
-    config.startFrom = await Prompter.prompt(
+    if(!usingConfig) config.startFrom = await Prompter.prompt(
         `\r\nIf you want to start from a specific account enter it, otherwise press enter: `
     );
 
