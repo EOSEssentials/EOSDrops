@@ -20,16 +20,17 @@ exports.getCSV = (pathToCSV) => {
  * @returns {Array}
  */
 exports.csvToJson = (csv) => {
-    // TODO: Should this be chunked out?
-    // TODO: It's possible this could cause problems on slower machines with 150K+ accounts
-
-    // Formatting array ( removing parenthesis, carriage returns and new lines, and splitting by comma delimiter
-    const arr = csv.replace(/["]/g, '').split('\r\n').join(',').split(',');
+    const arr = csv
+        .replace(/["]/g, '')
+        .replace(/\n/g,',')
+        .split(',');
 
     let tupled = [];
 
     // Removing Ethereum and EOS keys
-    arr.map((e,i) => { if(i % 2 === 1) tupled.push(e); });
+    arr.map(e => {
+        if(e.indexOf('0x') !== 0 && e.indexOf('EOS') !== 0) tupled.push(e);
+    });
 
     // Formatting to {account, amount}
     tupled = tupled.reduce((acc, e, i) => {

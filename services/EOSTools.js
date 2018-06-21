@@ -15,6 +15,7 @@ exports.setNetwork = async network => {
 };
 
 const getEos = async privateKey => {
+    console.log('httpEndpoint', httpEndpoint)
     const chainId = (await Eos({httpEndpoint}).getInfo({})).chainId;
     return privateKey
         ? Eos({httpEndpoint, keyProvider:privateKey, chainId})
@@ -29,7 +30,7 @@ exports.fillTokenStats = async config => {
     const eos = await getEos();
     return await eos.getTableRows({
         json:true,
-        code:'eosio.token',
+        code:config.tokenAccount,
         scope:config.symbol,
         table:'stat'
     }).then(x => {
@@ -37,7 +38,10 @@ exports.fillTokenStats = async config => {
         config.decimals = token.max_supply.split(' ')[0].split('.')[1].length;
         config.issuer = token.issuer;
         return true;
-    }).catch(() => false);
+    }).catch(() => {
+        console.error(`ERROR: Could not get token info from account: '${config.tokenAccount}' for the symbol '${config.symbol}'`);
+        process.exit();
+    });
 };
 
 exports.validPrivateKey = (privateKey) => ecc.isValidPrivate(privateKey);
@@ -88,7 +92,9 @@ exports.estimateRAM = async (accountBalances, config) => {
 exports.dropTokens = async (accountBalances, config) => {
     const eos = await getEos(config.privateKey);
     const auth = {authorization:[`${config.issuer}@active`]};
-    await recurseBatch(accountBalances, eos, auth, config);
+    const startingIndex = config.startFrom.length ? accountBalances.findIndex(e => e.account === config.startFrom) : 0;
+    const accountsFrom = accountBalances.slice(startingIndex, accountBalances.length-1);
+    await recurseBatch(accountsFrom, eos, auth, config);
 };
 
 const recurseBatch = async (accountBalances, eos, auth, config) => {
@@ -103,16 +109,19 @@ const recurseBatch = async (accountBalances, eos, auth, config) => {
 };
 
 const dropBatch = async (batch, eos, auth, symbol) => {
+
+    let error = null;
+
     const dropped = await eos.transaction(tr => batch.map(tuple =>
         tr.issue(tuple.account, `${tuple.amount} ${symbol}`, '', auth)
     )).then(res => res.transaction_id)
-        .catch(() => false);
+      .catch(err  => { error = err; return false; });
 
     // Quits on failure to allow restarting from a specified account
     // instead of having to parse the snapshot for sent/unsent.
     if(!dropped){
         console.error('\r\n-------------------------------------\r\n');
-        console.error('ERROR: Failed batch!')
+        console.error('ERROR: Failed batch! - ', error)
         console.error(batch.map(x => x.account).join(','));
         console.warn('You should restart the airdrop with the first account in the list above');
         console.error('\r\n-------------------------------------\r\n');
