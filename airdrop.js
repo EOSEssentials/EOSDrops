@@ -1,6 +1,28 @@
+const fs = require('fs');
+const winston = require('winston');
 const SnapshotTools = require('./services/SnapshotTools');
 const Prompter = require('./services/Prompter');
 const EOSTools = require('./services/EOSTools');
+
+// Creating the logs directory
+if (!fs.existsSync('logs')) fs.mkdirSync('logs');
+
+const logFormat = winston.format.printf(info => {
+    return `${(new Date()).toLocaleString()} - ${info.message}`;
+});
+
+const logger = winston.createLogger({
+    format: logFormat,
+    transports: [
+        new winston.transports.Console(),
+        new winston.transports.File({
+            filename: `logs/${+new Date()}_airdrop.log`,
+            level: 'silly'
+        })
+    ]
+});
+
+EOSTools.setLogger(logger);
 
 let config = {
     tokenAccount:'',
@@ -25,7 +47,7 @@ const getRatio = (tuple) => (tuple.amount * config.ratio).toFixed(config.decimal
 
 const run = async () => {
 
-    console.log(`Started EOSDrops at ${new Date().toLocaleString()}`);
+    logger.warn(`Started EOSDrops at ${new Date().toLocaleString()}`);
 
     let usingConfig = await Prompter.prompt(
         `\r\nDo you want to use the config.json file? \r\nEnter 'y' or press enter to set up using command line prompts`
@@ -50,7 +72,7 @@ const run = async () => {
 
         await EOSTools.setNetwork(config.network);
         if (!await EOSTools.fillTokenStats(config)) {
-            console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
+            logger.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
             process.exit();
         }
     } else {
@@ -67,7 +89,7 @@ const run = async () => {
 
         // Filling `decimals` and `issuer`
         if (!await EOSTools.fillTokenStats(config)) {
-            console.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
+            logger.error(`\r\nCould not find ${config.symbol} token on the eosio.token contract at ${config.tokenAccount}!`);
             process.exit();
         }
 
@@ -99,16 +121,16 @@ const run = async () => {
         `\r\nIf you want to start from a specific account enter it, otherwise press enter: `
     );
 
-    console.warn('\r\n\------------------------------------------------------------------\r\n');
-    console.warn(`Starting to airdrop from account '${config.startFrom ? config.startFrom : ratioBalances[0].account}'`);
-    console.warn('\r\n\------------------------------------------------------------------\r\n');
+    logger.warn('\r\n\------------------------------------------------------------------\r\n');
+    logger.warn(`Starting to airdrop from account '${config.startFrom ? config.startFrom : ratioBalances[0].account}'`);
+    logger.warn('\r\n\------------------------------------------------------------------\r\n');
 
     // Shutting off IO
     Prompter.donePrompting();
 
     await EOSTools.dropTokens(ratioBalances, config);
 
-    console.log(`Finished EOSDrops at ${new Date().toLocaleString()}`);
+    logger.warn(`Finished EOSDrops at ${new Date().toLocaleString()}`);
     process.exit();
 };
 

@@ -3,12 +3,15 @@ const {format, ecc} = Eos.modules;
 
 let httpEndpoint = null;
 let chainId = null;
+let logger = null;
+
+exports.setLogger = _logger => logger = _logger;
 
 exports.setNetwork = async network => {
     if(!network || !network.length) network = 'https://nodes.get-scatter.com';
 
     await Eos({httpEndpoint:network}).getInfo({}).catch(() => {
-        console.error(`Could not get_info from: ${network}`)
+        logger.error(`Could not get_info from: ${network}`)
         process.exit();
     }).then(info => chainId = info.chain_id);
 
@@ -16,7 +19,7 @@ exports.setNetwork = async network => {
 };
 
 const getEos = async privateKey => {
-    console.log(chainId, httpEndpoint);
+    logger.warn(chainId, httpEndpoint);
     return privateKey
         ? Eos({httpEndpoint, keyProvider:privateKey, chainId})
         : Eos({httpEndpoint, chainId});
@@ -39,7 +42,7 @@ exports.fillTokenStats = async config => {
         config.issuer = token.issuer;
         return true;
     }).catch(() => {
-        console.error(`ERROR: Could not get token info from account: '${config.tokenAccount}' for the symbol '${config.symbol}'`);
+        logger.error(`ERROR: Could not get token info from account: '${config.tokenAccount}' for the symbol '${config.symbol}'`);
         process.exit();
     });
 };
@@ -97,7 +100,7 @@ exports.dropTokens = async (accountBalances, config) => {
     const accountsFrom = accountBalances.slice(startingIndex, accountBalances.length-1);
 
     if(startingIndex > 0)
-        console.log(`Dropping to ${accountsFrom.length} accounts, already processed ${accountBalances.length - accountsFrom.length} accounts`);
+        logger.warn(`Dropping to ${accountsFrom.length} accounts, already processed ${accountBalances.length - accountsFrom.length} accounts`);
 
     await recurseBatch(accountsFrom, eos, contract, auth, config);
 };
@@ -122,7 +125,7 @@ const getBalance = async (eos, code, symbol, tuple) => {
     }).then(res => {
         return {account:tuple.account, dropped:!!res.rows.filter(row => row.balance.split(' ')[1] === symbol).length};
     }).catch(err => {
-        console.log(`ERROR: Failed to get tokens for ${tuple.account}. Considering this account already dropped and continuing. - `, err);
+        logger.warn(`ERROR: Failed to get tokens for ${tuple.account}. Considering this account already dropped and continuing. - `, err);
         return {account:tuple.account, dropped:true};
     })
 };
@@ -139,7 +142,7 @@ const dropBatch = async (batch, eos, contract, auth, symbol, code, memo, tries =
     batch = batch.filter(tuple => filters.find(filter => filter.account === tuple.account && !filter.dropped));
 
     if(!batch.length){
-        console.log('no batch');
+        logger.warn('no batch');
         return false;
     }
 
@@ -151,16 +154,16 @@ const dropBatch = async (batch, eos, contract, auth, symbol, code, memo, tries =
     // Quits on failure to allow restarting from a specified account
     // instead of having to parse the snapshot for sent/unsent.
     if(!dropped){
-        console.error('\r\n-------------------------------------\r\n');
-        console.error('ERROR: Failed batch! - ', error)
-        console.error(batch.map(x => x.account).join(','));
-        console.warn('You should restart the airdrop with the first account in the list above');
-        console.error('\r\n-------------------------------------\r\n');
+        logger.error('\r\n-------------------------------------\r\n');
+        logger.error('ERROR: Failed batch! - ', error)
+        logger.error(batch.map(x => x.account).join(','));
+        logger.error('You should restart the airdrop with the first account in the list above');
+        logger.error('\r\n-------------------------------------\r\n');
         return await dropBatch(batch, eos, contract, auth, symbol, code, memo, tries+1);
     }
 
     //10:18
     //10:39
-    console.log(`${new Date().toLocaleString()} | ${dropped} | ${batch.map(x => x.account).join(',')}`);
+    logger.warn(`${dropped} | ${batch.map(x => x.account).join(',')}`);
     return true;
 };
