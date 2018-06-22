@@ -10,6 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "eosjs": "^15.0.0"
+    "eosjs": "^15.0.1"
   }
 }

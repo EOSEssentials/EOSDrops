@@ -18,16 +18,14 @@ let config = {
  */
 const getRatio = (tuple) => (tuple.amount * config.ratio).toFixed(config.decimals);
 
-
+/*
+ Private Key: 5JShgqJSPsTDPPweJumazy1QdaKunEZ9mbCiq5svjphPTwzG7q5
+ Public Key: EOS72yeq1R1sbccSCoaQwPkFPjS38LXvZ9WiSJ5qKgheEKwD8vz2M
+ */
 
 const run = async () => {
 
-    // await EOSTools.setNetwork('http://192.168.1.7:8888');
-    // config.tokenAccount = 'eosio.token';
-    // config.symbol = 'TEST';
-    // await EOSTools.fillTokenStats(config);
-    // config.ratio = 1;
-    // config.privateKey = '5J5M2nbTFm2duizuS4ufggyyHLZg4dZcKRbSSDPp5rMq9b77h2a';
+    console.log(`Started EOSDrops at ${new Date().toLocaleString()}`);
 
     let usingConfig = await Prompter.prompt(
         `\r\nDo you want to use the config.json file? \r\nEnter 'y' or press enter to set up using command line prompts`
@@ -81,7 +79,7 @@ const run = async () => {
 
     }
 
-    const snapshot = await SnapshotTools.getCSV('snapshot_test.csv');
+    const snapshot = await SnapshotTools.getCSV('snapshot.csv');
     const accountBalances = SnapshotTools.csvToJson(snapshot);
     const ratioBalances = accountBalances.map(tuple => Object.assign(tuple, {amount:getRatio(tuple)}))
                           .filter(tuple => tuple.amount > 0);
@@ -110,6 +108,7 @@ const run = async () => {
 
     await EOSTools.dropTokens(ratioBalances, config);
 
+    console.log(`Finished EOSDrops at ${new Date().toLocaleString()}`);
     process.exit();
 };
 

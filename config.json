@@ -1,8 +1,9 @@
 {
-  "network":"http://192.168.1.7:8888",
-  "tokenAccount":"eosio.token",
+  "chainId":"038f4b0fc8ff18a4f0842a8f0564611f6e96e8535901dd45e43ac8691a1c4dca",
+  "network":"http://dev.cryptolions.io:38888",
+  "tokenAccount":"ridlridlridl",
   "ratio":1,
-  "symbol":"TEST",
-  "privateKey":"5J5M2nbTFm2duizuS4ufggyyHLZg4dZcKRbSSDPp5rMq9b77h2a",
+  "symbol":"RIDL",
+  "privateKey":"5JShgqJSPsTDPPweJumazy1QdaKunEZ9mbCiq5svjphPTwzG7q5",
   "startFrom":""
 }

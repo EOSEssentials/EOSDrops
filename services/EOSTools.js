@@ -1,7 +1,8 @@
 const Eos = require('eosjs');
-const {ecc} = Eos.modules;
+const {format, ecc} = Eos.modules;
 
 let httpEndpoint = null;
+let chainId = null;
 
 exports.setNetwork = async network => {
     if(!network || !network.length) network = 'https://nodes.get-scatter.com';
@@ -9,13 +10,13 @@ exports.setNetwork = async network => {
     await Eos({httpEndpoint:network}).getInfo({}).catch(() => {
         console.error(`Could not get_info from: ${network}`)
         process.exit();
-    });
+    }).then(info => chainId = info.chain_id);
 
     httpEndpoint = network;
 };
 
 const getEos = async privateKey => {
-    const chainId = (await Eos({httpEndpoint}).getInfo({})).chainId;
+    console.log(chainId, httpEndpoint);
     return privateKey
         ? Eos({httpEndpoint, keyProvider:privateKey, chainId})
         : Eos({httpEndpoint, chainId});
@@ -90,28 +91,52 @@ exports.estimateRAM = async (accountBalances, config) => {
  */
 exports.dropTokens = async (accountBalances, config) => {
     const eos = await getEos(config.privateKey);
+    const contract = await eos.contract(config.tokenAccount);
     const auth = {authorization:[`${config.issuer}@active`]};
     const startingIndex = config.startFrom.length ? accountBalances.findIndex(e => e.account === config.startFrom) : 0;
     const accountsFrom = accountBalances.slice(startingIndex, accountBalances.length-1);
-    await recurseBatch(accountsFrom, eos, auth, config);
+    await recurseBatch(accountsFrom, eos, contract, auth, config);
 };
 
-const recurseBatch = async (accountBalances, eos, auth, config) => {
+const recurseBatch = async (accountBalances, eos, contract, auth, config) => {
     return new Promise(async (resolve) => {
         if(!accountBalances.length) return resolve(true);
 
         const batch = [];
         while(batch.length < 10 && accountBalances.length) batch.push(accountBalances.shift());
-        await dropBatch(batch, eos, auth, config.symbol);
-        setTimeout(async() => await recurseBatch(accountBalances, eos, auth, config), 510);
+        const dropped = await dropBatch(batch, eos, contract, auth, config.symbol, config.tokenAccount);
+        setTimeout(async() => await recurseBatch(accountBalances, eos, contract, auth, config), dropped ? 510 : 1);
     })
 };
 
-const dropBatch = async (batch, eos, auth, symbol) => {
+const getBalance = async (eos, code, symbol, tuple) => {
+    return await eos.getTableRows({
+        json:true,
+        code,
+        scope:format.encodeName(tuple.account, false),
+        table:'accounts'
+    }).then(res => {
+        return {account:tuple.account, dropped:!!res.rows.filter(row => row.balance.split(' ')[1] === symbol).length};
+    }).catch(err => {
+        console.log(`ERROR: Failed to get tokens for ${tuple.account}. Considering this account already dropped and continuing. - `, err);
+        return {account:tuple.account, dropped:true};
+    })
+};
+
+const dropBatch = async (batch, eos, contract, auth, symbol, code) => {
 
     let error = null;
 
-    const dropped = await eos.transaction(tr => batch.map(tuple =>
+    //TODO: Validate balances
+    const filters = await Promise.all(batch.map(tuple => getBalance(eos, code, symbol, tuple)));
+    batch = batch.filter(tuple => filters.find(filter => filter.account === tuple.account && !filter.dropped));
+
+    if(!batch.length){
+        console.log('no batch');
+        return false;
+    }
+
+    const dropped = await contract.transaction(tr => batch.map(tuple =>
         tr.issue(tuple.account, `${tuple.amount} ${symbol}`, '', auth)
     )).then(res => res.transaction_id)
       .catch(err  => { error = err; return false; });
@@ -127,6 +152,7 @@ const dropBatch = async (batch, eos, auth, symbol) => {
         process.exit();
     }
 
+    //10:18
     console.log(`${new Date().toLocaleString()} | ${dropped} | ${batch.map(x => x.account).join(',')}`);
     return true;
 };
