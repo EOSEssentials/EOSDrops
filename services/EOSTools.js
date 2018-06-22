@@ -95,6 +95,10 @@ exports.dropTokens = async (accountBalances, config) => {
     const auth = {authorization:[`${config.issuer}@active`]};
     const startingIndex = config.startFrom.length ? accountBalances.findIndex(e => e.account === config.startFrom) : 0;
     const accountsFrom = accountBalances.slice(startingIndex, accountBalances.length-1);
+
+    if(startingIndex > 0)
+        console.log(`Dropping to ${accountsFrom.length} accounts, already processed ${accountBalances.length - accountsFrom.length} accounts`);
+
     await recurseBatch(accountsFrom, eos, contract, auth, config);
 };
 
@@ -103,9 +107,9 @@ const recurseBatch = async (accountBalances, eos, contract, auth, config) => {
         if(!accountBalances.length) return resolve(true);
 
         const batch = [];
-        while(batch.length < 10 && accountBalances.length) batch.push(accountBalances.shift());
-        const dropped = await dropBatch(batch, eos, contract, auth, config.symbol, config.tokenAccount);
-        setTimeout(async() => await recurseBatch(accountBalances, eos, contract, auth, config), dropped ? 510 : 1);
+        while(batch.length < 5 && accountBalances.length) batch.push(accountBalances.shift());
+        const dropped = await dropBatch(batch, eos, contract, auth, config.symbol, config.tokenAccount, config.memo);
+        setTimeout(async() => await recurseBatch(accountBalances, eos, contract, auth, config), 150);
     })
 };
 
@@ -123,7 +127,10 @@ const getBalance = async (eos, code, symbol, tuple) => {
     })
 };
 
-const dropBatch = async (batch, eos, contract, auth, symbol, code) => {
+const dropBatch = async (batch, eos, contract, auth, symbol, code, memo, tries = 0) => {
+    if(tries > 3){
+        process.exit();
+    }
 
     let error = null;
 
@@ -137,7 +144,7 @@ const dropBatch = async (batch, eos, contract, auth, symbol, code) => {
     }
 
     const dropped = await contract.transaction(tr => batch.map(tuple =>
-        tr.issue(tuple.account, `${tuple.amount} ${symbol}`, '', auth)
+        tr.issue(tuple.account, `${tuple.amount} ${symbol}`, memo, auth)
     )).then(res => res.transaction_id)
       .catch(err  => { error = err; return false; });
 
@@ -149,10 +156,11 @@ const dropBatch = async (batch, eos, contract, auth, symbol, code) => {
         console.error(batch.map(x => x.account).join(','));
         console.warn('You should restart the airdrop with the first account in the list above');
         console.error('\r\n-------------------------------------\r\n');
-        process.exit();
+        return await dropBatch(batch, eos, contract, auth, symbol, code, memo, tries+1);
     }
 
     //10:18
+    //10:39
     console.log(`${new Date().toLocaleString()} | ${dropped} | ${batch.map(x => x.account).join(',')}`);
     return true;
 };
