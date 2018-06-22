@@ -4,52 +4,51 @@ const SnapshotTools = require('./services/SnapshotTools');
 const Prompter = require('./services/Prompter');
 const EOSTools = require('./services/EOSTools');
 
-// Creating the logs directory
-if (!fs.existsSync('logs')) fs.mkdirSync('logs');
+let config = {};
+let logger = null;
+let db = null;
 
-const logFormat = winston.format.printf(info => {
-    return `${(new Date()).toLocaleString()} - ${info.message}`;
-});
+const setup = () => {
+    // Setting configs
+    config = require('./config.json');
 
-const logger = winston.createLogger({
-    format: logFormat,
-    transports: [
-        new winston.transports.Console(),
-        new winston.transports.File({
-            filename: `logs/${+new Date()}_airdrop.log`,
-            level: 'silly'
-        })
-    ]
-});
+    // Creating the logs directory
+    if (!fs.existsSync('logs')) fs.mkdirSync('logs');
+    if (!fs.existsSync('db')) fs.mkdirSync('db');
 
-EOSTools.setLogger(logger);
+    const low = require('lowdb');
+    const FileSync = require('lowdb/adapters/FileSync');
+    const adapter = new FileSync('db/airdrop.json');
+    const _db = low(adapter);
 
-let config = {
-    tokenAccount:'',
-    ratio:0,
-    decimals:4,
-    symbol:'',
-    issuer:'',
-    privateKey:'',
-    startFrom:'',
-};
+    _db.defaults({ failed: [], success:[], lastAccountDropped:'' }).write();
 
-/***
- * Multiplies by a ratio
- * @param tuple
- */
-const getRatio = (tuple) => (tuple.amount * config.ratio).toFixed(config.decimals);
+    const logFormat = winston.format.printf(info =>
+        `${(new Date()).toLocaleString()} - ${info.message}`);
 
-/*
- Private Key: 5JShgqJSPsTDPPweJumazy1QdaKunEZ9mbCiq5svjphPTwzG7q5
- Public Key: EOS72yeq1R1sbccSCoaQwPkFPjS38LXvZ9WiSJ5qKgheEKwD8vz2M
- */
+    const _logger = winston.createLogger({
+        format: logFormat,
+        transports: [
+            new winston.transports.Console(),
+            new winston.transports.File({
+                filename: `logs/${+new Date()}_airdrop.log`,
+                level: 'silly'
+            })
+        ]
+    });
+
+    logger = _logger;
+    db = _db;
+    EOSTools.setLogger(_logger);
+    EOSTools.setDB(_db);
+}
+
 
 const run = async () => {
+    const getRatio = (tuple) => (tuple.amount * config.ratio).toFixed(config.decimals);
 
     logger.warn(`Started EOSDrops at ${new Date().toLocaleString()}`);
 
-    config = Object.assign(config, require('./config.json'));
 
     const asserter = (condition, msg) => {
         if(!condition){
@@ -63,6 +62,7 @@ const run = async () => {
     asserter(config.symbol !== '', 'Symbol must not be empty');
     asserter(config.privateKey !== '', 'Issuer\'s private key must not be empty');
     asserter(config.ratio > 0, 'Ratio can not be less than 0');
+    asserter(config.batchSize > 0, 'Batch size must be greater than 0');
 
     await EOSTools.setNetwork(config.network);
     if (!await EOSTools.fillTokenStats(config)) {
@@ -87,7 +87,8 @@ const run = async () => {
     ) !== '') process.exit();
 
     logger.warn('\r\n\------------------------------------------------------------------\r\n');
-    logger.warn(`Starting to airdrop from account '${config.startFrom ? config.startFrom : ratioBalances[0].account}'`);
+    const lastAccountDropped = db.get('lastAccountDropped').value();
+    logger.warn(`Starting to airdrop from account '${lastAccountDropped.length ? lastAccountDropped : ratioBalances[0].account}'`);
     logger.warn('\r\n\------------------------------------------------------------------\r\n');
 
     // Shutting off IO
@@ -99,5 +100,7 @@ const run = async () => {
     process.exit();
 };
 
+
+setup();
 run();
 

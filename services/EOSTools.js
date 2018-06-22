@@ -1,11 +1,16 @@
 const Eos = require('eosjs');
 const {format, ecc} = Eos.modules;
+const pMap = require('p-map');
+
+
 
 let httpEndpoint = null;
 let chainId = null;
 let logger = null;
+let db = null;
 
 exports.setLogger = _logger => logger = _logger;
+exports.setDB = _db => db = _db;
 
 exports.setNetwork = async network => {
     if(!network || !network.length) network = 'https://nodes.get-scatter.com';
@@ -17,6 +22,8 @@ exports.setNetwork = async network => {
 
     httpEndpoint = network;
 };
+
+const lastAccount = () => db.get('lastAccountDropped').value();
 
 const getEos = async privateKey => {
     logger.warn(chainId, httpEndpoint);
@@ -84,38 +91,15 @@ exports.estimateRAM = async (accountBalances, config) => {
     return [totalKB, `${eosPrice} ${ramInfo[2]}`, `$${eosPrice*dollarPrice}`];
 };
 
+
 /***
- * Starts dropping the tokens.
- * Batches out requests to 10 transactions per batch.
- * Then waits 510 milliseconds between batches to hit the next block.
- * @param accountBalances
- * @param config
- * @returns {Promise.<void>}
+ * Gets an account's SYMBOL token balance
+ * @param eos
+ * @param code
+ * @param symbol
+ * @param tuple
+ * @returns {Promise.<TResult>}
  */
-exports.dropTokens = async (accountBalances, config) => {
-    const eos = await getEos(config.privateKey);
-    const contract = await eos.contract(config.tokenAccount);
-    const auth = {authorization:[`${config.issuer}@active`]};
-    const startingIndex = config.startFrom.length ? accountBalances.findIndex(e => e.account === config.startFrom) : 0;
-    const accountsFrom = accountBalances.slice(startingIndex, accountBalances.length-1);
-
-    if(startingIndex > 0)
-        logger.warn(`Dropping to ${accountsFrom.length} accounts, already processed ${accountBalances.length - accountsFrom.length} accounts`);
-
-    await recurseBatch(accountsFrom, eos, contract, auth, config);
-};
-
-const recurseBatch = async (accountBalances, eos, contract, auth, config) => {
-    return new Promise(async (resolve) => {
-        if(!accountBalances.length) return resolve(true);
-
-        const batch = [];
-        while(batch.length < 5 && accountBalances.length) batch.push(accountBalances.shift());
-        const dropped = await dropBatch(batch, eos, contract, auth, config.symbol, config.tokenAccount, config.memo);
-        setTimeout(async() => await recurseBatch(accountBalances, eos, contract, auth, config), 150);
-    })
-};
-
 const getBalance = async (eos, code, symbol, tuple) => {
     return await eos.getTableRows({
         json:true,
@@ -130,15 +114,64 @@ const getBalance = async (eos, code, symbol, tuple) => {
     })
 };
 
-const dropBatch = async (batch, eos, contract, auth, symbol, code, memo, tries = 0) => {
+/***
+ * Starts dropping the tokens.
+ * Batches out requests to 10 transactions per batch.
+ * Then waits 510 milliseconds between batches to hit the next block.
+ * @param accountBalances
+ * @param config
+ * @returns {Promise.<void>}
+ */
+exports.dropTokens = async (accountBalances, config) => {
+    const eos = await getEos(config.privateKey);
+    const contract = await eos.contract(config.tokenAccount);
+    const auth = {authorization:[`${config.issuer}@active`]};
+    const lastAccountDropped = lastAccount();
+    const startingIndex = lastAccountDropped.length ? accountBalances.findIndex(e => e.account === lastAccountDropped) : 0;
+    const accountsFrom = accountBalances.slice(startingIndex, accountBalances.length-1);
+
+    if(startingIndex > 0)
+        logger.warn(`Dropping to ${accountsFrom.length} accounts, already processed ${accountBalances.length - accountsFrom.length} accounts`);
+
+    await recurseBatch(accountsFrom, eos, contract, auth, config);
+};
+
+const recurseBatch = async (accountBalances, eos, contract, auth, config) => {
+    return new Promise(async (resolve) => {
+        if(!accountBalances.length) return resolve(true);
+
+        const batches = [];
+
+        const getBatch = size => {
+            const batch = [];
+            while(batch.length < size && accountBalances.length) batch.push(accountBalances.shift());
+            return batch;
+        };
+
+        const batchesCount = Math.round(config.batchSize / 10);
+        const perBatch = Math.round(config.batchSize / batchesCount);
+
+        while(batches.length < batchesCount && accountBalances.length)
+            batches.push(getBatch(perBatch));
+
+        await pMap(batches, batch => dropBatch(batch, eos, contract, auth, config));
+        setTimeout(async() => await recurseBatch(accountBalances, eos, contract, auth, config), 150);
+    })
+};
+
+const dropBatch = async (batch, eos, contract, auth, config, tries = 0) => {
     if(tries > 3){
-        process.exit();
+
+        db.update('failed', tuples => tuples = tuples.concat(batch)).write();
+        // process.exit();
     }
+
+    const {symbol, tokenAccount, memo, batchSize} = config;
+
 
     let error = null;
 
-    //TODO: Validate balances
-    const filters = await Promise.all(batch.map(tuple => getBalance(eos, code, symbol, tuple)));
+    const filters = await pMap(batch, tuple => getBalance(eos, tokenAccount, symbol, tuple), {concurrency:batchSize < 20 ? batchSize : 20});
     batch = batch.filter(tuple => filters.find(filter => filter.account === tuple.account && !filter.dropped));
 
     if(!batch.length){
@@ -159,11 +192,12 @@ const dropBatch = async (batch, eos, contract, auth, symbol, code, memo, tries =
         logger.error(batch.map(x => x.account).join(','));
         logger.error('You should restart the airdrop with the first account in the list above');
         logger.error('\r\n-------------------------------------\r\n');
-        return await dropBatch(batch, eos, contract, auth, symbol, code, memo, tries+1);
+        return await dropBatch(batch, eos, contract, auth, config, tries+1);
     }
 
-    //10:18
-    //10:39
+    db.set('lastAccountDropped', batch[batch.length-1].account).write();
+    db.update('success', tuples => tuples = tuples.concat(batch)).write();
+
     logger.warn(`${dropped} | ${batch.map(x => x.account).join(',')}`);
     return true;
 };
