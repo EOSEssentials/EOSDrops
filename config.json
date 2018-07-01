@@ -7,6 +7,6 @@
   "ratio":1,
   "memo":"Fuck Marketing",
   "batchSize":50,
-  "limitCap":250000,
+  "limitCap":0,
   "decimals":4
 }
