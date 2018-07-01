@@ -48,7 +48,8 @@ const setup = () => {
 }
 
 const filterLists = async (snapshot) => {
-    // removes blacklisted addresses
+    // removes blacklisted addresses, all the accounts added to blacklist.json file
+    // will be filtered out of the snapshot
     const filteredSnapshot = blacklist && blacklist.accounts && blacklist.accounts.length > 0 ?
         snapshot.filter(tuple => {
             if(blacklist.accounts.indexOf(tuple.account) < 0) {
@@ -60,13 +61,11 @@ const filterLists = async (snapshot) => {
         }) : snapshot;
 
     if(filteredSnapshot.length != snapshot.length && await Prompter.prompt(
-        `\r\nPress enter if you agree with above blacklist and want to continue`
+        `\r\nPress enter if you agree with above blacklist and want to continue (these accounts will be removed from the airdrop)`
     ) !== '') process.exit();
 
     // apply limit cap ignoring the white listed addresses
     if(config.limitCap && config.limitCap > 0) {
-
-        logger.warn(`You are limitting token holders to receive a max airdrop corresponding to ${config.limitCap} EOS`);
 
         const cappedSnapshot = filteredSnapshot.map(tuple => {
             const isWhite = capWhitelist.accounts.indexOf(tuple.account) > 0;
@@ -82,9 +81,12 @@ const filterLists = async (snapshot) => {
             return Object.assign({}, tuple, {amount})
         });
 
-        if(filteredSnapshot.length != snapshot.length && await Prompter.prompt(
-            `\r\nPress enter if you agree with above token airdrop cap`
-        ) !== '') process.exit();
+        if(filteredSnapshot.length != snapshot.length) {
+            logger.warn(`You are limitting token holders to receive a max airdrop corresponding to ${config.limitCap} EOS`);
+
+            if (await Prompter.prompt(`\r\nPress enter if you agree with above addresses tokens airdrop cap and whitelisted ones`) !== '')
+                process.exit()
+        }
 
         return cappedSnapshot;
 
