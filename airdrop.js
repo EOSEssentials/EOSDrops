@@ -5,12 +5,16 @@ const Prompter = require('./services/Prompter');
 const EOSTools = require('./services/EOSTools');
 
 let config = {};
+let blacklist = {};
+let capWhitelist = {};
 let logger = null;
 let db = null;
 
 const setup = () => {
     // Setting configs
     config = require('./config.json');
+    blacklist = require('./blacklist.json');
+    capWhitelist = require('./capWhitelist.json')
 
     // Creating the logs directory
     if (!fs.existsSync('logs')) fs.mkdirSync('logs');
@@ -43,6 +47,55 @@ const setup = () => {
     EOSTools.setDB(_db);
 }
 
+const filterLists = async (snapshot) => {
+    // removes blacklisted addresses, all the accounts added to blacklist.json file
+    // will be filtered out of the snapshot
+    const filteredSnapshot = blacklist && blacklist.accounts && blacklist.accounts.length > 0 ?
+        snapshot.filter(tuple => {
+            if(blacklist.accounts.indexOf(tuple.account) < 0) {
+                return true;
+            } else {
+                logger.warn(`Account ${tuple.account} was blacklisted - Amount: ${tuple.amount}`);
+                return false;
+            }
+        }) : snapshot;
+
+    if(filteredSnapshot.length != snapshot.length && await Prompter.prompt(
+        `\r\nPress enter if you agree with above blacklist and want to continue (these accounts will be removed from the airdrop)`
+    ) !== '') process.exit();
+
+    // apply limit cap ignoring the white listed addresses
+    if(config.limitCap && config.limitCap > 0) {
+
+        const cappedSnapshot = filteredSnapshot.map(tuple => {
+            const isWhite = capWhitelist.accounts.indexOf(tuple.account) > 0;
+
+            let amount = tuple.amount;
+            if (!isWhite && amount > config.limitCap) {
+                amount = config.limitCap;
+                logger.warn(`Account ${tuple.account} was capped - it had ${tuple.amount} before being capped to ${amount}`);
+            } else if (isWhite) {
+                logger.warn(`Account ${tuple.account} is whitelist, therefore not capped - it has a total amount of ${tuple.amount}`);
+            }
+
+            return Object.assign({}, tuple, {amount})
+        });
+
+        if(filteredSnapshot.length != snapshot.length) {
+            logger.warn(`You are limitting token holders to receive a max airdrop corresponding to ${config.limitCap} EOS`);
+
+            if (await Prompter.prompt(`\r\nPress enter if you agree with above addresses tokens airdrop cap and whitelisted ones`) !== '')
+                process.exit()
+        }
+
+        return cappedSnapshot;
+
+    } else {
+        return filteredSnapshot;
+    }
+
+}
+
 
 const run = async () => {
     const getRatio = (tuple) => (tuple.amount * config.ratio).toFixed(config.decimals);
@@ -71,7 +124,8 @@ const run = async () => {
     }
 
     const snapshot = await SnapshotTools.getCSV('snapshot.csv');
-    const accountBalances = SnapshotTools.csvToJson(snapshot);
+    const initialAccountBalances = SnapshotTools.csvToJson(snapshot);
+    const accountBalances = await filterLists(initialAccountBalances);
     const ratioBalances = accountBalances.map(tuple => Object.assign(tuple, {amount:getRatio(tuple)}))
                           .filter(tuple => tuple.amount > 0);
 

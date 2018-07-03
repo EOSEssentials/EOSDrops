@@ -6,5 +6,7 @@
   "symbol":"RIDL",
   "ratio":1,
   "memo":"Fuck Marketing",
-  "batchSize":50
+  "batchSize":50,
+  "limitCap":0,
+  "decimals":4
 }
